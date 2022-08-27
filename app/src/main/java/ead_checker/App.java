@@ -1,3 +1,5 @@
+package ead_checker;
+
 import org.apache.hc.client5.http.fluent.Request;
 
 import java.io.IOException;

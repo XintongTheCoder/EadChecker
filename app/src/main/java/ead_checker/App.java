@@ -10,6 +10,7 @@ public class App {
     public static void main(String[] args) {
         App app = new App();
         app.printCaseStatus(2190088100L, -500, 100);
+        throw new RuntimeException("uuu");
     }
 
     public String getContent(long receiptNumber) {

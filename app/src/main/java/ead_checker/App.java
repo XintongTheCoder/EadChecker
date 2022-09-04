@@ -1,67 +1,77 @@
 package ead_checker;
 
 import org.apache.hc.client5.http.fluent.Request;
-
 import java.io.IOException;
-
 import org.apache.hc.client5.http.fluent.Form;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 public class App {
     public static void main(String[] args) {
         App app = new App();
-        app.printCaseStatus(2190088100L, -500, 100);
-        throw new RuntimeException("uuu");
+        app.printCaseStatus(args[0], args[1]);
     }
 
-    public String getContent(long receiptNumber) {
-        String content = "";
+    public String getHtml(long receiptNumber) {
+        String html = "";
         String appReceiptNum = "WAC" + receiptNumber;
         try {
-            content = Request
-                    .post("https://egov.uscis.gov/casestatus/mycasestatus.do").bodyForm(Form.form()
-                            .add("appReceiptNum", appReceiptNum).add("caseStatusSearchBtn", "CHECK STATUS").build())
-                    .execute().returnContent().asString();
+            html = Request
+                    .post("https://egov.uscis.gov/casestatus/mycasestatus.do")
+                    .bodyForm(Form.form()
+                            .add("appReceiptNum", appReceiptNum)
+                            .add("caseStatusSearchBtn", "CHECK STATUS")
+                            .build())
+                    .execute()
+                    .returnContent()
+                    .asString();
         } catch (IOException e) {
             System.out.println("Error happened.");
             e.printStackTrace();
         }
-        return content;
+        return html;
     }
 
     public void printCaseStatus(long startNumber, long endNumber) {
         long receiptNumber = startNumber;
-        while (receiptNumber < endNumber) {
-            String content = getContent(receiptNumber);
-            if (content.contains("I-765")) {
-                StringBuilder stringBuilder = new StringBuilder();
-                stringBuilder.append("WAC").append(receiptNumber).append(": ").append(getCaseStatus(content))
-                        .append(": ").append(getCaseDate(content));
-
-                System.out.println(stringBuilder.toString());
-            }
+        while (receiptNumber <= endNumber) {
+            String html = getHtml(receiptNumber);
+            String caseInfo = getCaseInfo(html, receiptNumber);
+            if (caseInfo.length() > 0) {
+                System.out.println(caseInfo.toString());
+            }            
             receiptNumber++;
+        }        
+    }
+
+    public String getCaseInfo(String html, long receiptNumber) {
+        Document doc = Jsoup.parse(html);
+        Element content = doc.select("div.rows.text-center").first();
+        String caseInfo = content.select("p").first().text(); 
+        if (!caseInfo.contains("I-765")) { // Skip non-I-765 cases
+            return "";
         }
+        String caseStatus = content.select("h1").first().text();                   
+        int caseDateStartIndex = 3; // To skip "<p>On "
+        int caseDateEndIndex = caseInfo.indexOf(", 202") + 6; // ", 2022"
+        String caseDate = caseInfo.substring(caseDateStartIndex, caseDateEndIndex);
+        
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder
+                .append("WAC")
+                .append(receiptNumber)
+                .append(": ")
+                .append(caseStatus)
+                .append(": ")
+                .append(caseDate);
+        return stringBuilder.toString();
     }
 
-    public void printCaseStatus(long baseNumber, int shiftLower, int range) {
-        long startIndex = baseNumber - shiftLower;
-        long endIndex = startIndex + range;
+    public void printCaseStatus(String baseNumber, String range) {
+        int indexRange = Integer.valueOf(range);
+        long startIndex = Long.valueOf(baseNumber.substring(3)) - indexRange / 2;
+        long endIndex = startIndex + indexRange / 2;
         printCaseStatus(startIndex, endIndex);
-    }
-
-    public String getCaseStatus(String html) {
-        int startIndex = html.indexOf("<h1>");
-        int endIndex = html.indexOf("</h1>", startIndex);
-        int h1TagLength = 4;
-        return html.substring(startIndex + h1TagLength, endIndex);
-    }
-
-    public String getCaseDate(String html) {
-        int h1EndIndex = html.indexOf("</h1>");
-        int startIndex = html.indexOf("<p>", h1EndIndex);
-        int endIndex = html.indexOf(", 202", startIndex) + 6;
-        int pTagLength = 3;
-
-        return html.substring(startIndex + pTagLength, endIndex);
     }
 }

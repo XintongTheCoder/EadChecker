@@ -1,6 +1,8 @@
 package ead_checker;
 
 import java.io.IOException;
+import java.util.Set;
+
 import org.apache.hc.client5.http.fluent.Form;
 import org.apache.hc.client5.http.fluent.Request;
 
@@ -9,6 +11,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 public class EadChecker {
+    private static final Set<String> MONTHS = Set.of("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December");
     
     public String getHtml(long receiptNumber) {
         String html = "";
@@ -49,10 +52,16 @@ public class EadChecker {
         if (!caseInfo.contains("I-765")) { // Skip non-I-765 cases
             return "";
         }
-        String caseStatus = content.select("h1").first().text();                   
-        int caseDateStartIndex = 3; // To skip "<p>On "
-        int caseDateEndIndex = caseInfo.indexOf(", 202") + 6; // ", 2022"
-        String caseDate = caseInfo.substring(caseDateStartIndex, caseDateEndIndex);
+        String caseStatus = content.select("h1").first().text();  
+        String caseDate = "";
+        // If the caseInfo begins with a date, then the caseDate is this date;
+        for (String month : MONTHS) {
+            if (caseInfo.contains(month)) {
+                int caseDateEndIndex = caseInfo.indexOf(", 202") + 6; // ", 2022"
+                caseDate = caseInfo.substring(caseInfo.indexOf(month), caseDateEndIndex);
+                break;
+            }
+        }
         
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder

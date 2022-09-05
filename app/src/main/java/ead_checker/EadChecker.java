@@ -1,6 +1,12 @@
 package ead_checker;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.hc.client5.http.fluent.Form;
@@ -33,32 +39,15 @@ public class EadChecker {
         return html;
     }
 
-    public void printCaseStatus(long startNumber, long endNumber) {
-        long receiptNumber = startNumber;
-        while (receiptNumber <= endNumber) {
-            String html = getHtml(receiptNumber);
-            String caseInfo = getCaseInfo(html, receiptNumber);
-            if (caseInfo.length() > 0) {
-                System.out.println(caseInfo.toString());
-            }            
-            receiptNumber++;
-        }        
-    }
-
-    public String getCaseInfo(String html, long receiptNumber) {
-        Document doc = Jsoup.parse(html);
-        Element content = doc.select("div.rows.text-center").first();
-        String caseInfo = content.select("p").first().text(); 
-        if (!caseInfo.contains("I-765")) { // Skip non-I-765 cases
-            return "";
-        }
-        String caseStatus = content.select("h1").first().text();  
+    public void printCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {
+        String localCaseTitle = localCaseRecord != null ? localCaseRecord.getTitle() : "N/A";
+        String latestContent = latestCaseRecord.getContent();
         String caseDate = "";
-        // If the caseInfo begins with a date, then the caseDate is this date;
+        // If the content begins with a date, then the caseDate is this date;
         for (String month : MONTHS) {
-            if (caseInfo.contains(month)) {
-                int caseDateEndIndex = caseInfo.indexOf(", 202") + 6; // ", 2022"
-                caseDate = caseInfo.substring(caseInfo.indexOf(month), caseDateEndIndex);
+            if (latestContent.contains(month)) {
+                int caseDateEndIndex = latestContent.indexOf(", 202") + 6; // ", 2022"
+                caseDate = latestContent.substring(latestContent.indexOf(month), caseDateEndIndex);
                 break;
             }
         }
@@ -68,16 +57,91 @@ public class EadChecker {
                 .append("WAC")
                 .append(receiptNumber)
                 .append(": ")
-                .append(caseStatus)
-                .append(": ")
+                .append("\n")
+                .append("WAS: ")
+                .append(localCaseTitle)
+                .append("\n")
+                .append("IS: ")
+                .append(latestCaseRecord.getTitle())
+                .append(" On ")
                 .append(caseDate);
-        return stringBuilder.toString();
+        System.out.println(stringBuilder.toString());          
     }
 
-    public void printCaseStatus(String baseNumber, String range) {
+    public void checkCaseStatus(long startNumber, long endNumber) {
+        Map<Long, CaseRecord> localDataMap = readLocalData();
+        Map<Long, CaseRecord> latestDataMap = new HashMap<>();
+        boolean hasUpdates = false;
+        long receiptNumber = startNumber;
+        while (receiptNumber <= endNumber) {
+            String html = getHtml(receiptNumber);
+            CaseRecord latestCaseRecord = getCaseRecord(html, receiptNumber, localDataMap);
+            // To skip non-I-765 case
+            if (latestCaseRecord != null) {
+                latestDataMap.put(receiptNumber, new CaseRecord(latestCaseRecord.getTitle(), latestCaseRecord.getContent()));
+                // To print the updated cases
+                if (!localDataMap.containsKey(receiptNumber) || !localDataMap.get(receiptNumber).getTitle().equals(latestCaseRecord.getTitle())) {
+                    hasUpdates = true;
+                    printCaseStatus(receiptNumber, localDataMap.getOrDefault(receiptNumber, null), latestCaseRecord);
+                }
+            }
+            receiptNumber++;
+        }
+        // If there are any updates, overwrite the local-case-data;
+        if (hasUpdates) {
+            writeLocalData(latestDataMap);
+        }
+    }
+
+    public Map<Long, CaseRecord> readLocalData() {
+        Map<Long, CaseRecord> localDataMap = null;
+        String filename = "local-case-data.ser";
+        // Deserialization
+        try {
+            // Reading the Case record from local file
+            FileInputStream file = new FileInputStream(filename);
+            ObjectInputStream in = new ObjectInputStream(file);
+            localDataMap = (Map<Long, CaseRecord>) in.readObject();
+            in.close();
+            file.close();
+        } catch(IOException ex) {
+            return new HashMap<>();
+        } catch (ClassNotFoundException ex) {
+            ex.printStackTrace();
+        }
+        return localDataMap;
+    }
+
+    public void writeLocalData(Map<Long, CaseRecord> latestDataMap) {
+        String filename = "local-case-data.ser";
+        // Serialization
+        try {
+            FileOutputStream file = new FileOutputStream(filename);
+            ObjectOutputStream out = new ObjectOutputStream(file);
+            out.writeObject(latestDataMap);
+            out.close();
+            file.close();
+        } catch (IOException ex) {
+            System.out.println("IOException is caught");
+        }
+    }
+
+    public CaseRecord getCaseRecord(String html, long receiptNumber, Map<Long, CaseRecord> localDataMap) {
+        Document doc = Jsoup.parse(html);
+        Element caseElement = doc.select("div.rows.text-center").first();
+
+        String content = caseElement.select("p").first().text(); 
+        if (!content.contains("I-765") && !localDataMap.containsKey(receiptNumber)) { // Skip non-I-765 cases (The keyword "I-765" could be exclueded from case content in some case status)
+            return null;
+        }
+        String title = caseElement.select("h1").first().text();  
+        return new CaseRecord(title, content);
+    }
+
+    public void checkCaseStatus(String baseNumber, String range) {
         int indexRange = Integer.valueOf(range);
         long startIndex = Long.valueOf(baseNumber.substring(3)) - indexRange / 2;
         long endIndex = startIndex + indexRange / 2;
-        printCaseStatus(startIndex, endIndex);
+        checkCaseStatus(startIndex, endIndex);
     }
 }

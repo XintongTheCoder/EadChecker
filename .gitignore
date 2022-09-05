@@ -2,6 +2,7 @@
 *.jar
 *.war
 *.ear
+*.ser
 
 .gradle
 /build/
@@ -11,3 +12,4 @@ build
 
 .DS_Store
 .vscode
+

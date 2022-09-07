@@ -17,7 +17,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 public class EadChecker {
-    private static final Set<String> MONTHS = Set.of("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December");
     
     public String getHtml(long receiptNumber) {
         String html = "";
@@ -39,32 +38,30 @@ public class EadChecker {
         return html;
     }
 
-    public void printCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {
-        String localCaseTitle = localCaseRecord != null ? localCaseRecord.getTitle() : "N/A";
-        String latestContent = latestCaseRecord.getContent();
-        String caseDate = "";
-        // If the content begins with a date, then the caseDate is this date;
-        for (String month : MONTHS) {
-            if (latestContent.contains(month)) {
-                int caseDateEndIndex = latestContent.indexOf(", 202") + 6; // ", 2022"
-                caseDate = latestContent.substring(latestContent.indexOf(month), caseDateEndIndex);
-                break;
-            }
-        }
-        
+    public void printCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {        
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder
                 .append("WAC")
                 .append(receiptNumber)
                 .append(": ")
                 .append("\n")
-                .append("WAS: ")
-                .append(localCaseTitle)
+                .append("WAS: ");
+        if (localCaseRecord == null) {
+            stringBuilder
+                .append("N/A");
+        } else {
+            stringBuilder
+                .append(localCaseRecord.getTitle())
+                .append(": ")
+                .append(localCaseRecord.getContent());
+        }
+        stringBuilder
                 .append("\n")
                 .append("IS: ")
                 .append(latestCaseRecord.getTitle())
-                .append(" On ")
-                .append(caseDate);
+                .append(" - ")
+                .append(latestCaseRecord.getContent());
+                
         System.out.println(stringBuilder.toString());          
     }
 

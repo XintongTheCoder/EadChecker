@@ -5,9 +5,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
+import java.util.Properties;
 
 import org.apache.hc.client5.http.fluent.Form;
 import org.apache.hc.client5.http.fluent.Request;
@@ -16,8 +18,19 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.MimeMessage;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.internet.InternetAddress;
+import javax.mail.PasswordAuthentication;
+
 public class EadChecker {
-    
+    private String recipientsEmail;
+    private String sendersEmail;
+    private String sendersPassword;
+    public StringBuilder messageStringBuilder = new StringBuilder();
     public String getHtml(long receiptNumber) {
         String html = "";
         String appReceiptNum = "WAC" + receiptNumber;
@@ -32,13 +45,12 @@ public class EadChecker {
                     .returnContent()
                     .asString();
         } catch (IOException e) {
-            System.out.println("Error happened.");
-            e.printStackTrace();
+            sendMessage("Error happened.", e.getMessage());         
         }
         return html;
     }
 
-    public void printCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {        
+    public void getCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {    
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder
                 .append("WAC")
@@ -60,9 +72,11 @@ public class EadChecker {
                 .append("IS: ")
                 .append(latestCaseRecord.getTitle())
                 .append(" - ")
-                .append(latestCaseRecord.getContent());
+                .append(latestCaseRecord.getContent())
+                .append("\n")
+                .append("\n");
                 
-        System.out.println(stringBuilder.toString());          
+        messageStringBuilder.append(stringBuilder);          
     }
 
     public void checkCaseStatus(long startNumber, long endNumber) {
@@ -79,7 +93,7 @@ public class EadChecker {
                 // To print the updated cases
                 if (!localDataMap.containsKey(receiptNumber) || !localDataMap.get(receiptNumber).getTitle().equals(latestCaseRecord.getTitle())) {
                     hasUpdates = true;
-                    printCaseStatus(receiptNumber, localDataMap.getOrDefault(receiptNumber, null), latestCaseRecord);
+                    getCaseStatus(receiptNumber, localDataMap.getOrDefault(receiptNumber, null), latestCaseRecord);
                 }
             }
             receiptNumber++;
@@ -87,6 +101,9 @@ public class EadChecker {
         // If there are any updates, overwrite the local-case-data;
         if (hasUpdates) {
             writeLocalData(latestDataMap);
+            // Send message
+            String subject = "UPDATES ON EAD STATUS!"; 
+            sendMessage(subject, messageStringBuilder.toString());
         }
     }
 
@@ -135,10 +152,62 @@ public class EadChecker {
         return new CaseRecord(title, content);
     }
 
-    public void checkCaseStatus(String baseNumber, String range) {
+    public void checkCaseStatus(String baseNumber, String range, String recipientsEmail, String sendersEmail, String sendersPassword) {
+        this.recipientsEmail = recipientsEmail;
+        this.sendersEmail = sendersEmail;
+        this.sendersPassword = sendersPassword;
         int indexRange = Integer.valueOf(range);
         long startIndex = Long.valueOf(baseNumber.substring(3)) - indexRange / 2;
         long endIndex = startIndex + indexRange / 2;
         checkCaseStatus(startIndex, endIndex);
+    }
+
+    public void sendMessage(String subject, String message) {
+        String to = recipientsEmail;
+        String from = sendersEmail;
+        String host = "smtp.gmail.com";
+        Properties properties = System.getProperties();
+        // Setup mail server
+        properties.put("mail.smtp.host", host);
+        properties.put("mail.smtp.port", "465");
+        properties.put("mail.smtp.ssl.enable", "true");
+        properties.put("mail.smtp.auth", "true");
+        // Get the Session object.// and pass username and password
+        Session session = Session.getInstance(properties, new javax.mail.Authenticator() {
+
+            protected PasswordAuthentication getPasswordAuthentication() {
+
+                return new PasswordAuthentication(sendersEmail, sendersPassword);
+
+            }
+
+        });
+
+        // Used to debug SMTP issues
+        session.setDebug(true);
+
+        try {
+            // Create a default MimeMessage object
+            MimeMessage mimeMessage = new MimeMessage(session);
+            // Set From: header field of the header
+            mimeMessage.setFrom(new InternetAddress(from));
+            // Set To: header field of the header
+            mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(to));
+            // Set Subject: header field
+            mimeMessage.setSubject(subject);
+            // Set the email content
+            mimeMessage.setText(message);
+            // Send message
+            Transport.send(mimeMessage);
+            System.out.println("Sent message on: " + getCurrentDateAndTime());
+        } catch (MessagingException mex) {
+            mex.printStackTrace();
+        }
+    }
+
+    public String getCurrentDateAndTime() {
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss");
+        LocalDateTime now = LocalDateTime.now();
+        return dtf.format(now);
     }
 }

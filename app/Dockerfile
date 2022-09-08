@@ -9,6 +9,7 @@ RUN gradle installDist
 FROM openjdk:17-oracle
 RUN microdnf install findutils
 COPY --from=builder /home/gradle/src/build/install/src/ /app/
+COPY --from=builder /home/gradle/src/build/resources/main/ /app/resources
 WORKDIR /app
 
 CMD ["bin/src"]

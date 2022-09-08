@@ -26,9 +26,14 @@ dependencies {
     implementation 'org.jsoup:jsoup:1.15.3'
     implementation 'com.sun.mail:javax.mail:1.6.2'
     implementation 'javax.activation:activation:1.1'
+    implementation 'org.json:json:20211205'
 }
 
 application {
     // Define the main class for the application.
     mainClass = 'ead_checker.App'
 }
+
+File runningDir = new File('src/main')
+runningDir.mkdir();
+tasks.run.workingDir = runningDir

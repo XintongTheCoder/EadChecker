@@ -5,14 +5,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
-import org.json.JSONObject;
 
 import org.apache.hc.client5.http.fluent.Form;
 import org.apache.hc.client5.http.fluent.Request;
@@ -21,42 +15,11 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.MimeMessage;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.internet.InternetAddress;
-import javax.mail.PasswordAuthentication;
 
 public class EadChecker {
-    private String receiptNumber;
-    private String range;
-    private String recipientsEmail;
-    private String sendersEmail;
-    private String sendersPassword;
-    private StringBuilder messageStringBuilder = new StringBuilder();
-    private String errorSubject = "EAD CHECKER ERROR HAPPEND.";
+    private StringBuilder messageStringBuilder = new StringBuilder();    
 
-    public void parseJson(String path) {
-        Path filePath = Path.of(path);
-        try {
-            String jsonString = Files.readString(filePath);
-            System.out.println(jsonString);
-            JSONObject jsonObj = new JSONObject(jsonString);
-            this.receiptNumber = jsonObj.getString("receiptNumber");
-            this.range = jsonObj.getString("range"); 
-            this.recipientsEmail = jsonObj.getString("recipientsEmail");
-            this.sendersEmail = jsonObj.getString("sendersEmail");
-            this.sendersPassword = jsonObj.getString("sendersPassword");
-        } catch (IOException ex) {
-            ex.printStackTrace();         
-            sendMessage(errorSubject, ex.getMessage()); 
-            System.exit(1);        
-        }        
-    }
-
-    public String getHtml(long receiptNumber) {
+    private String getHtml(long receiptNumber) {
         String html = "";
         String appReceiptNum = "WAC" + receiptNumber;
         try {
@@ -70,14 +33,12 @@ public class EadChecker {
                     .returnContent()
                     .asString();
         } catch (IOException ex) {
-            ex.printStackTrace();         
-            sendMessage(errorSubject, ex.getMessage());         
-            System.exit(1);        
+            handleError(ex);       
         }
         return html;
     }
 
-    public void getCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {    
+    private void getCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {    
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder
                 .append("WAC")
@@ -106,7 +67,7 @@ public class EadChecker {
         messageStringBuilder.append(stringBuilder);          
     }
 
-    public void checkCaseStatus(long startNumber, long endNumber) {
+    private void checkCaseStatus(long startNumber, long endNumber) {
         Map<Long, CaseRecord> localDataMap = readLocalData();
         Map<Long, CaseRecord> latestDataMap = new HashMap<>();
         boolean hasUpdates = false;
@@ -130,11 +91,11 @@ public class EadChecker {
             writeLocalData(latestDataMap);
             // Send message
             String subject = "UPDATES ON EAD STATUS!"; 
-            sendMessage(subject, messageStringBuilder.toString());
+            MessageSender.getInstance().sendMessage(subject, messageStringBuilder.toString());
         }
     }
 
-    public Map<Long, CaseRecord> readLocalData() {
+    private Map<Long, CaseRecord> readLocalData() {
         Map<Long, CaseRecord> localDataMap = null;
         String filename = "local-case-data.ser";
         // Deserialization
@@ -148,14 +109,12 @@ public class EadChecker {
         } catch(IOException ex) {
             return new HashMap<>();
         } catch (ClassNotFoundException ex) {
-            ex.printStackTrace();
-            sendMessage(errorSubject, ex.getMessage());         
-            System.exit(1);        
+            handleError(ex);       
         }
         return localDataMap;
     }
 
-    public void writeLocalData(Map<Long, CaseRecord> latestDataMap) {
+    private void writeLocalData(Map<Long, CaseRecord> latestDataMap) {
         String filename = "local-case-data.ser";
         // Serialization
         try {
@@ -165,13 +124,17 @@ public class EadChecker {
             out.close();
             file.close();
         } catch (IOException ex) {
-            ex.printStackTrace();
-            sendMessage(errorSubject, ex.getMessage());         
-            System.exit(1);        
+            handleError(ex);
         }
     }
 
-    public CaseRecord getCaseRecord(String html, long receiptNumber, Map<Long, CaseRecord> localDataMap) {
+    private void handleError(Exception ex) {
+        ex.printStackTrace();
+        MessageSender.getInstance().sendMessage("EAD CHECKER ERROR HAPPEND", ex.getMessage());         
+        System.exit(1);
+    }
+
+    private CaseRecord getCaseRecord(String html, long receiptNumber, Map<Long, CaseRecord> localDataMap) {
         Document doc = Jsoup.parse(html);
         Element caseElement = doc.select("div.rows.text-center").first();
 
@@ -184,61 +147,9 @@ public class EadChecker {
     }
 
     public void checkCaseStatus() {
-        parseJson("resources/args.json");        
-        int indexRange = Integer.valueOf(range);
-        long startIndex = Long.valueOf(receiptNumber.substring(3)) - indexRange / 2;
+        int indexRange = Integer.valueOf(Args.getInstance().getRange());
+        long startIndex = Long.valueOf(Args.getInstance().getReceiptNumber().substring(3)) - indexRange / 2;
         long endIndex = startIndex + indexRange / 2;
         checkCaseStatus(startIndex, endIndex);
-    }
-
-    public void sendMessage(String subject, String message) {
-        String to = recipientsEmail;
-        String from = sendersEmail;
-        String host = "smtp.gmail.com";
-        Properties properties = System.getProperties();
-        // Setup mail server
-        properties.put("mail.smtp.host", host);
-        properties.put("mail.smtp.port", "465");
-        properties.put("mail.smtp.ssl.enable", "true");
-        properties.put("mail.smtp.auth", "true");
-        // Get the Session object.// and pass username and password
-        Session session = Session.getInstance(properties, new javax.mail.Authenticator() {
-
-            protected PasswordAuthentication getPasswordAuthentication() {
-
-                return new PasswordAuthentication(sendersEmail, sendersPassword);
-
-            }
-
-        });
-
-        // Used to debug SMTP issues
-        // session.setDebug(true);
-
-        try {
-            // Create a default MimeMessage object
-            MimeMessage mimeMessage = new MimeMessage(session);
-            // Set From: header field of the header
-            mimeMessage.setFrom(new InternetAddress(from));
-            // Set To: header field of the header
-            mimeMessage.addRecipient(Message.RecipientType.TO, new InternetAddress(to));
-            // Set Subject: header field
-            mimeMessage.setSubject(subject);
-            // Set the email content
-            mimeMessage.setText(message);
-            // Send message
-            Transport.send(mimeMessage);
-            System.out.println("Sent message on: " + getCurrentDateAndTime());
-        } catch (MessagingException mex) {
-            mex.printStackTrace();
-            sendMessage(errorSubject, mex.getMessage());         
-            System.exit(1);        
-        }
-    }
-
-    public String getCurrentDateAndTime() {
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        return dtf.format(now);
     }
 }

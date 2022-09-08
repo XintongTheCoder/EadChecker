@@ -6,17 +6,19 @@ import java.util.Timer;
 
 public class App {
     public static void main(String[] args) {
-        System.out.println("Working Directory = " + System.getProperty("user.dir"));
         EadChecker eadChecker = new EadChecker();
         Timer t = new Timer();
         TimerTask timerTask = new TimerTask(){
             @Override
             public void run() {
+                // long start = System.currentTimeMillis();
                 eadChecker.checkCaseStatus();
+                // long end = System.currentTimeMillis();
+                // System.out.println("Elapsed Time in nano seconds: " + (end - start));
             };
         };
         long delay = 0;
-        long period = 60 * 1000;
+        long period = 24 * 60 * 60 * 1000; // period: 24h
         t.scheduleAtFixedRate(timerTask, delay, period);
     } 
 }

@@ -6,13 +6,13 @@ import java.util.Timer;
 
 public class App {
     public static void main(String[] args) {
+        System.out.println("Working Directory = " + System.getProperty("user.dir"));
         EadChecker eadChecker = new EadChecker();
         Timer t = new Timer();
         TimerTask timerTask = new TimerTask(){
             @Override
             public void run() {
-                // 'receiptNumber, case range, recipient's gmail, sender's gmail, sender's password'
-                eadChecker.checkCaseStatus(args[0], args[1], args[2], args[3], args[4]);
+                eadChecker.checkCaseStatus();
             };
         };
         long delay = 0;

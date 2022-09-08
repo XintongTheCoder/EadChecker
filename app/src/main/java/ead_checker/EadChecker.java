@@ -5,11 +5,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.json.JSONObject;
 
 import org.apache.hc.client5.http.fluent.Form;
 import org.apache.hc.client5.http.fluent.Request;
@@ -27,10 +30,29 @@ import javax.mail.internet.InternetAddress;
 import javax.mail.PasswordAuthentication;
 
 public class EadChecker {
+    private String receiptNumber;
+    private String range;
     private String recipientsEmail;
     private String sendersEmail;
     private String sendersPassword;
     public StringBuilder messageStringBuilder = new StringBuilder();
+
+    public void parseJson(String path) {
+        Path filePath = Path.of(path);
+        try {
+            String jsonString = Files.readString(filePath);
+            System.out.println(jsonString);
+            JSONObject jsonObj = new JSONObject(jsonString);
+            this.receiptNumber = jsonObj.getString("receiptNumber");
+            this.range = jsonObj.getString("range"); 
+            this.recipientsEmail = jsonObj.getString("recipientsEmail");
+            this.sendersEmail = jsonObj.getString("sendersEmail");
+            this.sendersPassword = jsonObj.getString("sendersPassword");
+        } catch (IOException ex) {
+            ex.printStackTrace();         
+        }        
+    }
+
     public String getHtml(long receiptNumber) {
         String html = "";
         String appReceiptNum = "WAC" + receiptNumber;
@@ -152,12 +174,10 @@ public class EadChecker {
         return new CaseRecord(title, content);
     }
 
-    public void checkCaseStatus(String baseNumber, String range, String recipientsEmail, String sendersEmail, String sendersPassword) {
-        this.recipientsEmail = recipientsEmail;
-        this.sendersEmail = sendersEmail;
-        this.sendersPassword = sendersPassword;
+    public void checkCaseStatus() {
+        parseJson("resources/args.json");        
         int indexRange = Integer.valueOf(range);
-        long startIndex = Long.valueOf(baseNumber.substring(3)) - indexRange / 2;
+        long startIndex = Long.valueOf(receiptNumber.substring(3)) - indexRange / 2;
         long endIndex = startIndex + indexRange / 2;
         checkCaseStatus(startIndex, endIndex);
     }
@@ -184,7 +204,7 @@ public class EadChecker {
         });
 
         // Used to debug SMTP issues
-        session.setDebug(true);
+        // session.setDebug(true);
 
         try {
             // Create a default MimeMessage object

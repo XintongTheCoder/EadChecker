@@ -35,7 +35,8 @@ public class EadChecker {
     private String recipientsEmail;
     private String sendersEmail;
     private String sendersPassword;
-    public StringBuilder messageStringBuilder = new StringBuilder();
+    private StringBuilder messageStringBuilder = new StringBuilder();
+    private String errorSubject = "EAD CHECKER ERROR HAPPEND.";
 
     public void parseJson(String path) {
         Path filePath = Path.of(path);
@@ -50,6 +51,8 @@ public class EadChecker {
             this.sendersPassword = jsonObj.getString("sendersPassword");
         } catch (IOException ex) {
             ex.printStackTrace();         
+            sendMessage(errorSubject, ex.getMessage()); 
+            System.exit(1);        
         }        
     }
 
@@ -66,8 +69,10 @@ public class EadChecker {
                     .execute()
                     .returnContent()
                     .asString();
-        } catch (IOException e) {
-            sendMessage("Error happened.", e.getMessage());         
+        } catch (IOException ex) {
+            ex.printStackTrace();         
+            sendMessage(errorSubject, ex.getMessage());         
+            System.exit(1);        
         }
         return html;
     }
@@ -144,6 +149,8 @@ public class EadChecker {
             return new HashMap<>();
         } catch (ClassNotFoundException ex) {
             ex.printStackTrace();
+            sendMessage(errorSubject, ex.getMessage());         
+            System.exit(1);        
         }
         return localDataMap;
     }
@@ -158,7 +165,9 @@ public class EadChecker {
             out.close();
             file.close();
         } catch (IOException ex) {
-            System.out.println("IOException is caught");
+            ex.printStackTrace();
+            sendMessage(errorSubject, ex.getMessage());         
+            System.exit(1);        
         }
     }
 
@@ -222,6 +231,8 @@ public class EadChecker {
             System.out.println("Sent message on: " + getCurrentDateAndTime());
         } catch (MessagingException mex) {
             mex.printStackTrace();
+            sendMessage(errorSubject, mex.getMessage());         
+            System.exit(1);        
         }
     }
 

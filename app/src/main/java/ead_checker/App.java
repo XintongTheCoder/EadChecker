@@ -11,10 +11,10 @@ public class App {
         TimerTask timerTask = new TimerTask(){
             @Override
             public void run() {
-                long start = System.currentTimeMillis();
+                // long start = System.currentTimeMillis();
                 eadChecker.checkCaseStatus();
-                long end = System.currentTimeMillis();
-                System.out.println("Elapsed Time in milliseconds: " + (end - start));
+                // long end = System.currentTimeMillis();
+                // System.out.println("Elapsed Time in milliseconds: " + (end - start));
             };
         };
         long delay = 0;

@@ -63,9 +63,7 @@ public class MessageSender {
             Transport.send(mimeMessage);
             System.out.println("Sent message on: " + getCurrentDateAndTime());
         } catch (MessagingException mex) {
-            mex.printStackTrace();
-            sendMessage("EAD CHECKER ERROR HAPPEND", mex.getMessage());         
-            System.exit(1);        
+            ErrorHandler.getInstance().handleError(mex);      
         }
     }
 

@@ -1,20 +1,20 @@
 package ead_checker;
 
 import java.util.TimerTask;
-
 import java.util.Timer;
 
 public class App {
     public static void main(String[] args) {
         EadChecker eadChecker = new EadChecker();
         Timer t = new Timer();
+        System.out.println(Runtime.getRuntime().availableProcessors());
         TimerTask timerTask = new TimerTask(){
             @Override
             public void run() {
                 // long start = System.currentTimeMillis();
                 eadChecker.checkCaseStatus();
                 // long end = System.currentTimeMillis();
-                // System.out.println("Elapsed Time in nano seconds: " + (end - start));
+                // System.out.println("Elapsed Time in milliseconds: " + (end - start));
             };
         };
         long delay = 0;

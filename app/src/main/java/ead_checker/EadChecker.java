@@ -5,40 +5,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.apache.hc.client5.http.fluent.Form;
-import org.apache.hc.client5.http.fluent.Request;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 
 public class EadChecker {
-    private StringBuilder messageStringBuilder = new StringBuilder();    
 
-    private String getHtml(long receiptNumber) {
-        String html = "";
-        String appReceiptNum = "WAC" + receiptNumber;
-        try {
-            html = Request
-                    .post("https://egov.uscis.gov/casestatus/mycasestatus.do")
-                    .bodyForm(Form.form()
-                            .add("appReceiptNum", appReceiptNum)
-                            .add("caseStatusSearchBtn", "CHECK STATUS")
-                            .build())
-                    .execute()
-                    .returnContent()
-                    .asString();
-        } catch (IOException ex) {
-            handleError(ex);       
-        }
-        return html;
-    }
-
-    private void getCaseStatus(Long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord) {    
+    private void generateCaseStatus(long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord, StringBuilder messageStringBuilder) {    
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder
                 .append("WAC")
@@ -66,27 +42,35 @@ public class EadChecker {
                 
         messageStringBuilder.append(stringBuilder);          
     }
-
+    
     private void checkCaseStatus(long startNumber, long endNumber) {
-        Map<Long, CaseRecord> localDataMap = readLocalData();
-        Map<Long, CaseRecord> latestDataMap = new HashMap<>();
-        boolean hasUpdates = false;
+        ConcurrentMap<Long, CaseRecord> localDataMap = readLocalData();
+        ConcurrentMap<Long, CaseRecord> latestDataMap = new ConcurrentHashMap<>();
+
+        ExecutorService executor = Executors.newFixedThreadPool(1); // IO-heavy
         long receiptNumber = startNumber;
         while (receiptNumber <= endNumber) {
-            String html = getHtml(receiptNumber);
-            CaseRecord latestCaseRecord = getCaseRecord(html, receiptNumber, localDataMap);
-            // To skip non-I-765 case
-            if (latestCaseRecord != null) {
-                latestDataMap.put(receiptNumber, new CaseRecord(latestCaseRecord.getTitle(), latestCaseRecord.getContent()));
-                // To print the updated cases
-                if (!localDataMap.containsKey(receiptNumber) || !localDataMap.get(receiptNumber).getTitle().equals(latestCaseRecord.getTitle())) {
-                    hasUpdates = true;
-                    getCaseStatus(receiptNumber, localDataMap.getOrDefault(receiptNumber, null), latestCaseRecord);
-                }
-            }
+            Runnable singleCaseChecker = new SingleCaseChecker(receiptNumber, localDataMap, latestDataMap);
+            executor.execute(singleCaseChecker);
             receiptNumber++;
         }
-        // If there are any updates, overwrite the local-case-data;
+        executor.shutdown();
+        try {
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            ErrorHandler.getInstance().handleError(ex);
+        }
+        // If there are any updates, generate the message and overwrite the local-case-data;
+        boolean hasUpdates = false;
+        StringBuilder messageStringBuilder = new StringBuilder();
+        for (long receiptNum: latestDataMap.keySet()) {
+            CaseRecord localCaseRecord = localDataMap.containsKey(receiptNum) ? localDataMap.get(receiptNum) : null;
+            CaseRecord latestCaseRecord = latestDataMap.get(receiptNum);
+            if (localCaseRecord == null || !localCaseRecord.getTitle().equals(latestCaseRecord.getTitle())) {
+                hasUpdates = true;
+                generateCaseStatus(receiptNumber, localCaseRecord, latestCaseRecord, messageStringBuilder);
+            }
+        }
         if (hasUpdates) {
             writeLocalData(latestDataMap);
             // Send message
@@ -95,26 +79,26 @@ public class EadChecker {
         }
     }
 
-    private Map<Long, CaseRecord> readLocalData() {
-        Map<Long, CaseRecord> localDataMap = null;
+    private ConcurrentMap<Long, CaseRecord> readLocalData() {
+        ConcurrentMap<Long, CaseRecord> localDataMap = null;
         String filename = "local-case-data.ser";
         // Deserialization
         try {
             // Reading the Case record from local file
             FileInputStream file = new FileInputStream(filename);
             ObjectInputStream in = new ObjectInputStream(file);
-            localDataMap = (Map<Long, CaseRecord>) in.readObject();
+            localDataMap = (ConcurrentMap<Long, CaseRecord>) in.readObject();
             in.close();
             file.close();
         } catch(IOException ex) {
-            return new HashMap<>();
+            return new ConcurrentHashMap<>();
         } catch (ClassNotFoundException ex) {
-            handleError(ex);       
+            ErrorHandler.getInstance().handleError(ex);       
         }
         return localDataMap;
     }
 
-    private void writeLocalData(Map<Long, CaseRecord> latestDataMap) {
+    private void writeLocalData(ConcurrentMap<Long, CaseRecord> latestDataMap) {
         String filename = "local-case-data.ser";
         // Serialization
         try {
@@ -124,26 +108,8 @@ public class EadChecker {
             out.close();
             file.close();
         } catch (IOException ex) {
-            handleError(ex);
+            ErrorHandler.getInstance().handleError(ex);
         }
-    }
-
-    private void handleError(Exception ex) {
-        ex.printStackTrace();
-        MessageSender.getInstance().sendMessage("EAD CHECKER ERROR HAPPEND", ex.getMessage());         
-        System.exit(1);
-    }
-
-    private CaseRecord getCaseRecord(String html, long receiptNumber, Map<Long, CaseRecord> localDataMap) {
-        Document doc = Jsoup.parse(html);
-        Element caseElement = doc.select("div.rows.text-center").first();
-
-        String content = caseElement.select("p").first().text(); 
-        if (!content.contains("I-765") && !localDataMap.containsKey(receiptNumber)) { // Skip non-I-765 cases (The keyword "I-765" could be exclueded from case content in some case status)
-            return null;
-        }
-        String title = caseElement.select("h1").first().text();  
-        return new CaseRecord(title, content);
     }
 
     public void checkCaseStatus() {

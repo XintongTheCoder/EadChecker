@@ -14,43 +14,32 @@ import java.util.concurrent.TimeUnit;
 
 public class EadChecker {
 
-    private void generateCaseStatus(long receiptNumber, CaseRecord localCaseRecord, CaseRecord latestCaseRecord, StringBuilder messageStringBuilder) {    
+    private void generateCaseStatus(long receiptNumber, CaseRecord localCaseRecord,
+            CaseRecord latestCaseRecord, StringBuilder messageStringBuilder) {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder
-                .append("WAC")
-                .append(receiptNumber)
-                .append(": ")
-                .append("\n")
-                .append("WAS: ");
+        stringBuilder.append("WAC").append(receiptNumber).append(": ").append("\n").append("WAS: ");
         if (localCaseRecord == null) {
-            stringBuilder
-                .append("N/A");
+            stringBuilder.append("N/A");
         } else {
-            stringBuilder
-                .append(localCaseRecord.getTitle())
-                .append(": ")
-                .append(localCaseRecord.getContent());
+            stringBuilder.append(localCaseRecord.getTitle()).append(": ")
+                    .append(localCaseRecord.getContent());
         }
-        stringBuilder
-                .append("\n")
-                .append("IS: ")
-                .append(latestCaseRecord.getTitle())
-                .append(" - ")
-                .append(latestCaseRecord.getContent())
-                .append("\n")
-                .append("\n");
-                
-        messageStringBuilder.append(stringBuilder);          
+        stringBuilder.append("\n").append("IS: ").append(latestCaseRecord.getTitle()).append(" - ")
+                .append(latestCaseRecord.getContent()).append("\n").append("\n");
+
+        messageStringBuilder.append(stringBuilder);
     }
-    
+
     private void checkCaseStatus(long startNumber, long endNumber) {
         ConcurrentMap<Long, CaseRecord> localDataMap = readLocalData();
         ConcurrentMap<Long, CaseRecord> latestDataMap = new ConcurrentHashMap<>();
 
-        ExecutorService executor = Executors.newFixedThreadPool(1); // IO-heavy
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        ExecutorService executor = Executors.newFixedThreadPool(availableProcessors); // IO-heavy
         long receiptNumber = startNumber;
         while (receiptNumber <= endNumber) {
-            Runnable singleCaseChecker = new SingleCaseChecker(receiptNumber, localDataMap, latestDataMap);
+            Runnable singleCaseChecker =
+                    new SingleCaseChecker(receiptNumber, localDataMap, latestDataMap);
             executor.execute(singleCaseChecker);
             receiptNumber++;
         }
@@ -63,18 +52,21 @@ public class EadChecker {
         // If there are any updates, generate the message and overwrite the local-case-data;
         boolean hasUpdates = false;
         StringBuilder messageStringBuilder = new StringBuilder();
-        for (long receiptNum: latestDataMap.keySet()) {
-            CaseRecord localCaseRecord = localDataMap.containsKey(receiptNum) ? localDataMap.get(receiptNum) : null;
+        for (long receiptNum : latestDataMap.keySet()) {
+            CaseRecord localCaseRecord =
+                    localDataMap.containsKey(receiptNum) ? localDataMap.get(receiptNum) : null;
             CaseRecord latestCaseRecord = latestDataMap.get(receiptNum);
-            if (localCaseRecord == null || !localCaseRecord.getTitle().equals(latestCaseRecord.getTitle())) {
+            if (localCaseRecord == null
+                    || !localCaseRecord.getTitle().equals(latestCaseRecord.getTitle())) {
                 hasUpdates = true;
-                generateCaseStatus(receiptNumber, localCaseRecord, latestCaseRecord, messageStringBuilder);
+                generateCaseStatus(receiptNumber, localCaseRecord, latestCaseRecord,
+                        messageStringBuilder);
             }
         }
         if (hasUpdates) {
             writeLocalData(latestDataMap);
             // Send message
-            String subject = "UPDATES ON EAD STATUS!"; 
+            String subject = "UPDATES ON EAD STATUS!";
             MessageSender.getInstance().sendMessage(subject, messageStringBuilder.toString());
         }
     }
@@ -90,10 +82,10 @@ public class EadChecker {
             localDataMap = (ConcurrentMap<Long, CaseRecord>) in.readObject();
             in.close();
             file.close();
-        } catch(IOException ex) {
+        } catch (IOException ex) {
             return new ConcurrentHashMap<>();
         } catch (ClassNotFoundException ex) {
-            ErrorHandler.getInstance().handleError(ex);       
+            ErrorHandler.getInstance().handleError(ex);
         }
         return localDataMap;
     }
@@ -114,7 +106,8 @@ public class EadChecker {
 
     public void checkCaseStatus() {
         int indexRange = Integer.valueOf(Args.getInstance().getRange());
-        long startIndex = Long.valueOf(Args.getInstance().getReceiptNumber().substring(3)) - indexRange / 2;
+        long startIndex =
+                Long.valueOf(Args.getInstance().getReceiptNumber().substring(3)) - indexRange / 2;
         long endIndex = startIndex + indexRange / 2;
         checkCaseStatus(startIndex, endIndex);
     }

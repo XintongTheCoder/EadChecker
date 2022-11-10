@@ -7,7 +7,6 @@ public class App {
     public static void main(String[] args) {
         EadChecker eadChecker = new EadChecker();
         Timer t = new Timer();
-        System.out.println(Runtime.getRuntime().availableProcessors());
         TimerTask timerTask = new TimerTask(){
             @Override
             public void run() {

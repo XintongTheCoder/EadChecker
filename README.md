@@ -8,6 +8,11 @@ I picked up Java 101 and started the first line of this project. Things aren't g
 
 Through this journey, I gradually learned how to fire HTTP requests, utilize git, manipulate string, use HTML parser, serialize and deserialize objects, use Gradle as a build tool, and package code into Docker image. A newfound passion for programming has emerged, overshadowing my aspirations as a mechanical engineer. Now, my desire is to delve deeper into the realm of coding and explore new possibilities.
 
+## Technologies
+
+[![Gradle](https://img.shields.io/badge/Gradle-02303A.svg?style=for-the-badge&logo=Gradle&logoColor=white)](https://gradle.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED.svg?style=for-the-badge&logo=Docker&logoColor=white)](https://www.docker.com/)
+
 ## Getting Started
 
 Here is a guideline to help you get started to use this EAD-checker.
